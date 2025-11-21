@@ -1,43 +1,73 @@
-name: 下载 uConsole CM4 镜像文件
+name: 下载并发布 uConsole 镜像文件
 on:
-  # 可根据需求修改触发条件：手动触发、推送代码、定时任务等
-  workflow_dispatch:  # 手动触发（推荐测试用）
-  # push:
-  #   branches: [ main ]  # 推送 main 分支时触发
-  # schedule:
-  #   - cron: '0 0 * * *'  # 每天 UTC 0 点自动执行（可选）
+  workflow_dispatch:  # 手动触发（推荐）
+    inputs:
+      release_tag:
+        description: 'Release 标签（例如：v2.0）'
+        required: true
+        default: 'v2.0'
+      release_title:
+        description: 'Release 标题'
+        required: true
+        default: 'uConsole CM4 v2.0 64bit 镜像'
+      release_body:
+        description: 'Release 描述'
+        required: false
+        default: '自动构建的 uConsole CM4 v2.0 64bit 系统镜像（来源：http://dl.clockworkpi.com/uConsole_CM4_v2.0_64bit.img.7z）'
 
 jobs:
-  download-img:
-    runs-on: ubuntu-latest  # 使用 Ubuntu  runner（兼容性最好）
+  download-and-release:
+    runs-on: ubuntu-latest
     steps:
       - name: 检出项目代码
-        uses: actions/checkout@v4  # 检出项目到 runner 工作目录
+        uses: actions/checkout@v4
 
-      - name: 安装依赖工具（wget + 7z 解压工具）
+      - name: 安装依赖工具
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget p7zip-full  # p7zip-full 用于后续可能的解压（可选）
+          sudo apt-get install -y wget p7zip-full
 
       - name: 下载 uConsole 镜像文件
         run: |
-          # 目标文件 URL 和保存路径（项目根目录）
           IMG_URL="http://dl.clockworkpi.com/uConsole_CM4_v2.0_64bit.img.7z"
           SAVE_PATH="${{ github.workspace }}/uConsole_CM4_v2.0_64bit.img.7z"
           
-          # 使用 wget 下载，添加断点续传和超时重试
-          wget -c --timeout=30 --tries=5 -O "$SAVE_PATH" "$IMG_URL"
+          # 断点续传 + 重试机制
+          wget -c --timeout=60 --tries=10 -O "$SAVE_PATH" "$IMG_URL"
           
-          # 验证文件是否下载成功（检查文件大小 > 1MB）
-          if [ ! -f "$SAVE_PATH" ] || [ $(stat -c%s "$SAVE_PATH") -lt 1048576 ]; then
-            echo "错误：文件下载失败或不完整！"
+          # 验证文件完整性（大小 > 4GB，因为原文件约 4GB）
+          if [ ! -f "$SAVE_PATH" ] || [ $(stat -c%s "$SAVE_PATH") -lt 4294967296 ]; then
+            echo "错误：文件下载失败或不完整（预期 >4GB）！"
             exit 1
           fi
-          echo "文件下载成功，保存路径：$SAVE_PATH"
+          echo "文件下载成功：$SAVE_PATH"
+          echo "文件大小：$(du -sh "$SAVE_PATH" | awk '{print $1}')"
 
-      - name: （可选）保存下载的文件到工作流产物（便于手动下载）
+      - name: 保存为工作流产物（便于快速下载）
         uses: actions/upload-artifact@v4
         with:
           name: uconsole-cm4-img
           path: ${{ github.workspace }}/uConsole_CM4_v2.0_64bit.img.7z
-          retention-days: 7  # 产物保留 7 天（可调整）
+          retention-days: 7  # 保留 7 天
+
+      - name: 创建 GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub 自动提供的密钥
+        with:
+          tag_name: ${{ github.event.inputs.release_tag }}  # 从手动触发输入获取标签
+          release_name: ${{ github.event.inputs.release_title }}  # 从输入获取标题
+          body: ${{ github.event.inputs.release_body }}  # 从输入获取描述
+          draft: false  # 不创建草稿（直接发布）
+          prerelease: false  # 不是预发布版本
+
+      - name: 上传文件到 Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}  # 从创建 Release 步骤获取上传地址
+          asset_path: ${{ github.workspace }}/uConsole_CM4_v2.0_64bit.img.7z  # 本地文件路径
+          asset_name: uConsole_CM4_v2.0_64bit.img.7z  # Release 中显示的文件名
+          asset_content_type: application/x-7z-compressed  # MIME 类型（7z 文件专用）
