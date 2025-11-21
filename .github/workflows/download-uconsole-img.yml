@@ -1,0 +1,59 @@
+name: 下载 uConsole CM4 镜像文件
+on:
+  # 可根据需求修改触发条件：手动触发、推送代码、定时任务等
+  workflow_dispatch:  # 手动触发（推荐测试用）
+  # push:
+  #   branches: [ main ]  # 推送 main 分支时触发
+  # schedule:
+  #   - cron: '0 0 * * *'  # 每天 UTC 0 点自动执行（可选）
+
+jobs:
+  download-img:
+    runs-on: ubuntu-latest  # 使用 Ubuntu  runner（兼容性最好）
+    steps:
+      - name: 检出项目代码
+        uses: actions/checkout@v4  # 检出项目到 runner 工作目录
+
+      - name: 安装依赖工具（wget + 7z 解压工具）
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget p7zip-full  # p7zip-full 用于后续可能的解压（可选）
+
+      - name: 下载 uConsole 镜像文件
+        run: |
+          # 目标文件 URL 和保存路径（项目根目录）
+          IMG_URL="http://dl.clockworkpi.com/uConsole_CM4_v2.0_64bit.img.7z"
+          SAVE_PATH="${{ github.workspace }}/uConsole_CM4_v2.0_64bit.img.7z"
+          
+          # 使用 wget 下载，添加断点续传和超时重试
+          wget -c --timeout=30 --tries=5 -O "$SAVE_PATH" "$IMG_URL"
+          
+          # 验证文件是否下载成功（检查文件大小 > 1MB）
+          if [ ! -f "$SAVE_PATH" ] || [ $(stat -c%s "$SAVE_PATH") -lt 1048576 ]; then
+            echo "错误：文件下载失败或不完整！"
+            exit 1
+          fi
+          echo "文件下载成功，保存路径：$SAVE_PATH"
+
+      - name: （可选）验证文件完整性（如果有 MD5/SHA 校验值）
+        run: |
+          # 注意：如果官方提供了校验值，替换下面的示例值
+          # 示例：假设官方 MD5 是 1234567890abcdef（实际需要从官网查询真实值）
+          EXPECTED_MD5="替换为官方提供的 MD5 值"
+          ACTUAL_MD5=$(md5sum "${{ github.workspace }}/uConsole_CM4_v2.0_64bit.img.7z" | awk '{print $1}')
+          
+          if [ "$ACTUAL_MD5" != "$EXPECTED_MD5" ]; then
+            echo "错误：文件 MD5 校验失败！"
+            echo "预期：$EXPECTED_MD5"
+            echo "实际：$ACTUAL_MD5"
+            exit 1
+          fi
+          echo "文件完整性校验通过！"
+        # 若没有官方校验值，可删除此步骤或注释掉
+
+      - name: （可选）保存下载的文件到工作流产物（便于手动下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: uconsole-cm4-img
+          path: ${{ github.workspace }}/uConsole_CM4_v2.0_64bit.img.7z
+          retention-days: 7  # 产物保留 7 天（可调整）
