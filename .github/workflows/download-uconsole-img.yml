@@ -35,22 +35,6 @@ jobs:
           fi
           echo "文件下载成功，保存路径：$SAVE_PATH"
 
-      - name: （可选）验证文件完整性（如果有 MD5/SHA 校验值）
-        run: |
-          # 注意：如果官方提供了校验值，替换下面的示例值
-          # 示例：假设官方 MD5 是 1234567890abcdef（实际需要从官网查询真实值）
-          EXPECTED_MD5="替换为官方提供的 MD5 值"
-          ACTUAL_MD5=$(md5sum "${{ github.workspace }}/uConsole_CM4_v2.0_64bit.img.7z" | awk '{print $1}')
-          
-          if [ "$ACTUAL_MD5" != "$EXPECTED_MD5" ]; then
-            echo "错误：文件 MD5 校验失败！"
-            echo "预期：$EXPECTED_MD5"
-            echo "实际：$ACTUAL_MD5"
-            exit 1
-          fi
-          echo "文件完整性校验通过！"
-        # 若没有官方校验值，可删除此步骤或注释掉
-
       - name: （可选）保存下载的文件到工作流产物（便于手动下载）
         uses: actions/upload-artifact@v4
         with:
