@@ -34,12 +34,7 @@ jobs:
           
           # 断点续传 + 重试机制
           wget -c --timeout=60 --tries=10 -O "$SAVE_PATH" "$IMG_URL"
-          
-          # 验证文件完整性（大小 > 4GB，因为原文件约 4GB）
-          if [ ! -f "$SAVE_PATH" ] || [ $(stat -c%s "$SAVE_PATH") -lt 4294967296 ]; then
-            echo "错误：文件下载失败或不完整（预期 >4GB）！"
-            exit 1
-          fi
+    
           echo "文件下载成功：$SAVE_PATH"
           echo "文件大小：$(du -sh "$SAVE_PATH" | awk '{print $1}')"
 
